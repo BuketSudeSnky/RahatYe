@@ -1,4 +1,6 @@
-import React from "react";
+
+import React, { useMemo } from "react";
+
 import {
   View,
   Text,
@@ -6,8 +8,9 @@ import {
   StyleSheet,
 } from "react-native";
 
-import { colors } from "../theme/colors";
+import type { ThemeColors } from "../theme/colors";
 import { typography } from "../theme/typography";
+import { useThemeStore } from "../store/useThemeStore";
 
 type Option<T extends string> = {
   label: string;
@@ -29,12 +32,23 @@ export default function SelectionChips<T extends string>({
   onChange,
   multiple = true,
 }: SelectionChipsProps<T>) {
+  // AKTİF TEMA
+  const colors = useThemeStore((state) => state.colors);
+
+  const styles = useMemo(
+    () => createStyles(colors),
+    [colors]
+  );
+
+  // SEÇİM İŞLEMİ
   const handleSelect = (value: T) => {
     const isSelected = selectedValues.includes(value);
 
     if (multiple) {
       if (isSelected) {
-        onChange(selectedValues.filter((item) => item !== value));
+        onChange(
+          selectedValues.filter((item) => item !== value)
+        );
       } else {
         onChange([...selectedValues, value]);
       }
@@ -49,14 +63,22 @@ export default function SelectionChips<T extends string>({
 
       <View style={styles.optionsContainer}>
         {options.map((option) => {
-          const isSelected = selectedValues.includes(option.value);
+          const isSelected = selectedValues.includes(
+            option.value
+          );
 
           return (
             <Pressable
               key={option.value}
-              onPress={() => handleSelect(option.value)}
-              accessibilityRole={multiple ? "checkbox" : "radio"}
-              accessibilityState={{ checked: isSelected }}
+              onPress={() =>
+                handleSelect(option.value)
+              }
+              accessibilityRole={
+                multiple ? "checkbox" : "radio"
+              }
+              accessibilityState={{
+                checked: isSelected,
+              }}
               style={[
                 styles.chip,
                 isSelected && styles.selectedChip,
@@ -65,7 +87,8 @@ export default function SelectionChips<T extends string>({
               <Text
                 style={[
                   styles.chipText,
-                  isSelected && styles.selectedChipText,
+                  isSelected &&
+                    styles.selectedChipText,
                 ]}
               >
                 {option.label}
@@ -78,39 +101,47 @@ export default function SelectionChips<T extends string>({
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    marginBottom: 24,
-  },
-  title: {
-    fontSize: typography.body,
-    fontWeight: "600",
-    color: colors.text,
-    marginBottom: 12,
-  },
-  optionsContainer: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-  },
-  chip: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: colors.chipBackground,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  selectedChip: {
-    backgroundColor: colors.selectedBackground,
-    borderColor: colors.primary,
-  },
-  chipText: {
-    fontSize: typography.caption,
-    color: colors.secondaryText,
-  },
-  selectedChipText: {
-    color: colors.primaryDark,
-    fontWeight: "600",
-  },
-});
+// DİNAMİK TEMA STİLLERİ
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: {
+      marginBottom: 24,
+    },
+
+    title: {
+      fontSize: typography.body,
+      fontWeight: "600",
+      color: colors.text,
+      marginBottom: 12,
+    },
+
+    optionsContainer: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 10,
+    },
+
+    chip: {
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      borderRadius: 20,
+      backgroundColor: colors.chipBackground,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+
+    selectedChip: {
+      backgroundColor: colors.selectedBackground,
+      borderColor: colors.primary,
+    },
+
+    chipText: {
+      fontSize: typography.caption,
+      color: colors.secondaryText,
+    },
+
+    selectedChipText: {
+      color: colors.text,
+      fontWeight: "600",
+    },
+  });

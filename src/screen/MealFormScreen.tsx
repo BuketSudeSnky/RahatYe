@@ -1,5 +1,6 @@
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
+
 import {
   View,
   Text,
@@ -7,11 +8,12 @@ import {
   ScrollView,
   Pressable,
   StyleSheet,
-  Alert,
   ActivityIndicator,
 } from "react-native";
 
 import SelectionChips from "../components/SelectionChips";
+import CustomAlert from "../components/CustomAlert";
+import type { AlertType } from "../components/CustomAlert";
 
 import {
   MEAL_CATEGORIES,
@@ -27,24 +29,37 @@ import type {
   MealLog,
 } from "../types/meal";
 
-import { colors } from "../theme/colors";
+import type { ThemeColors } from "../theme/colors";
 import { typography } from "../theme/typography";
 import { useMealStore } from "../store/useMealStore";
+import { useThemeStore } from "../store/useThemeStore";
 
-// FORMUN ALACAĞI PROPS
 interface MealFormScreenProps {
   editingMeal: MealLog | null;
   onEditComplete: () => void;
+}
+
+interface AlertState {
+  visible: boolean;
+  title: string;
+  message: string;
+  type: AlertType;
+  completeEditOnClose: boolean;
 }
 
 export default function MealFormScreen({
   editingMeal,
   onEditComplete,
 }: MealFormScreenProps) {
-  // DÜZENLEME MODU KONTROLÜ
   const isEditing = editingMeal !== null;
 
-  // FORM STATE
+  const colors = useThemeStore((state) => state.colors);
+
+  const styles = useMemo(
+    () => createStyles(colors),
+    [colors]
+  );
+
   const [mealName, setMealName] = useState(
     editingMeal?.mealName ?? ""
   );
@@ -67,16 +82,57 @@ export default function MealFormScreen({
 
   const [isSaving, setIsSaving] = useState(false);
 
-  // ZUSTAND FONKSİYONLARI
+
+  const [alertState, setAlertState] = useState<AlertState>({
+    visible: false,
+    title: "",
+    message: "",
+    type: "info",
+    completeEditOnClose: false,
+  });
+
+
   const addMeal = useMealStore((state) => state.addMeal);
-  const updateMeal = useMealStore((state) => state.updateMeal);
+  const updateMeal = useMealStore(
+    (state) => state.updateMeal
+  );
   const syncMeal = useMealStore((state) => state.syncMeal);
 
-  // FORM DOĞRULAMA
+
   const isValid =
     mealName.trim().length > 0 && category.length > 0;
 
-  // FORMU TEMİZLE
+
+  const showAlert = (
+    title: string,
+    message: string,
+    type: AlertType,
+    completeEditOnClose = false
+  ) => {
+    setAlertState({
+      visible: true,
+      title,
+      message,
+      type,
+      completeEditOnClose,
+    });
+  };
+
+  const closeAlert = () => {
+    const shouldCompleteEdit =
+      alertState.completeEditOnClose;
+
+    setAlertState((previous) => ({
+      ...previous,
+      visible: false,
+      completeEditOnClose: false,
+    }));
+
+    if (shouldCompleteEdit) {
+      onEditComplete();
+    }
+  };
+
   const resetForm = () => {
     setMealName("");
     setCategory([]);
@@ -85,13 +141,11 @@ export default function MealFormScreen({
     setSeverity(1);
   };
 
-  // KAYDET / GÜNCELLE
   const handleSubmit = async () => {
     if (!isValid || isSaving) return;
 
     setIsSaving(true);
 
-    // DÜZENLEME İŞLEMİ
     if (editingMeal) {
       const updatedMeal: MealLog = {
         ...editingMeal,
@@ -105,16 +159,17 @@ export default function MealFormScreen({
       try {
         await updateMeal(updatedMeal);
 
-        Alert.alert(
+        showAlert(
           "Başarılı",
-          "Öğün başarıyla güncellendi."
+          "Öğün başarıyla güncellendi.",
+          "success",
+          true
         );
-
-        onEditComplete();
       } catch (error) {
-        Alert.alert(
+        showAlert(
           "Güncelleme Hatası",
-          "Öğün güncellenemedi. Lütfen tekrar dene."
+          "Öğün güncellenemedi. Lütfen tekrar dene.",
+          "error"
         );
       } finally {
         setIsSaving(false);
@@ -123,7 +178,6 @@ export default function MealFormScreen({
       return;
     }
 
-    // YENİ ÖĞÜN OLUŞTURMA
     const newMeal: MealLog = {
       id: `${Date.now()}-${Math.random()
         .toString(36)
@@ -136,34 +190,34 @@ export default function MealFormScreen({
       createdAt: new Date().toISOString(),
     };
 
-    // ÖNCE CİHAZA KAYDET
     try {
       await addMeal(newMeal);
     } catch (error) {
-      Alert.alert(
+      showAlert(
         "Kayıt Hatası",
-        "Öğün cihazına kaydedilemedi. Lütfen tekrar dene."
+        "Öğün cihazına kaydedilemedi. Lütfen tekrar dene.",
+        "error"
       );
 
       setIsSaving(false);
       return;
     }
 
-    // YEREL KAYIT BAŞARILIYSA FORMU TEMİZLE
     resetForm();
 
-    // MOCK API İLE SENKRONİZASYON
     try {
       await syncMeal(newMeal.id);
 
-      Alert.alert(
+      showAlert(
         "Başarılı",
-        "Öğün kaydedildi ve senkronize edildi."
+        "Öğün kaydedildi ve senkronize edildi.",
+        "success"
       );
     } catch (error) {
-      Alert.alert(
+      showAlert(
         "Senkronizasyon Başarısız",
-        "Öğünün cihazına kaydedildi ancak sunucuya gönderilemedi. Geçmiş ekranından tekrar deneyebilirsin."
+        "Öğünün cihazına kaydedildi ancak sunucuya gönderilemedi. Geçmiş ekranından tekrar deneyebilirsin.",
+        "warning"
       );
     } finally {
       setIsSaving(false);
@@ -171,240 +225,261 @@ export default function MealFormScreen({
   };
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.content}
-      keyboardShouldPersistTaps="handled"
-    >
-      {/* BAŞLIK */}
-      <Text style={styles.heading}>
-        {isEditing ? "Öğünü Düzenle" : "Yeni Öğün"}
-      </Text>
+    <View style={styles.screen}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* BAŞLIK */}
+        <Text style={styles.heading}>
+          {isEditing ? "Öğünü Düzenle" : "Yeni Öğün"}
+        </Text>
 
-      <Text style={styles.description}>
-        {isEditing
-          ? "Öğün bilgilerini güncelleyebilirsin."
-          : "Ne yedin, nasıl hissettin?"}
-      </Text>
+        <Text style={styles.description}>
+          {isEditing
+            ? "Öğün bilgilerini güncelleyebilirsin."
+            : "Ne yedin, nasıl hissettin?"}
+        </Text>
 
-      {/* YEMEK ADI */}
-      <Text style={styles.label}>Yemek Adı</Text>
+        {/* YEMEK ADI */}
+        <Text style={styles.label}>
+          Yemek Adı
+        </Text>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Örn. Tavuklu makarna"
-        placeholderTextColor={colors.secondaryText}
-        value={mealName}
-        onChangeText={setMealName}
-        maxLength={100}
-        editable={!isSaving}
-      />
+        <TextInput
+          style={styles.input}
+          placeholder="Örn. Tavuklu makarna"
+          placeholderTextColor={colors.secondaryText}
+          selectionColor={colors.primary}
+          value={mealName}
+          onChangeText={setMealName}
+          maxLength={100}
+          editable={!isSaving}
+        />
 
-      {/* YEMEK KATEGORİSİ */}
-      <SelectionChips
-        title="Yemek Kategorisi"
-        options={MEAL_CATEGORIES}
-        selectedValues={category}
-        onChange={setCategory}
-        multiple={false}
-      />
+        {/* YEMEK KATEGORİSİ */}
+        <SelectionChips
+          title="Yemek Kategorisi"
+          options={MEAL_CATEGORIES}
+          selectedValues={category}
+          onChange={setCategory}
+          multiple={false}
+        />
 
-      {/* TETİKLEYİCİ ETİKETLER */}
-      <SelectionChips
-        title="Tetikleyici Etiketler"
-        options={TRIGGER_TAGS}
-        selectedValues={triggerTags}
-        onChange={setTriggerTags}
-        multiple={true}
-      />
+        {/* TETİKLEYİCİ ETİKETLER */}
+        <SelectionChips
+          title="Tetikleyici Etiketler"
+          options={TRIGGER_TAGS}
+          selectedValues={triggerTags}
+          onChange={setTriggerTags}
+          multiple={true}
+        />
 
-      {/* SEMPTOMLAR */}
-      <SelectionChips
-        title="Semptomlar"
-        options={SYMPTOMS}
-        selectedValues={symptoms}
-        onChange={setSymptoms}
-        multiple={true}
-      />
+        {/* SEMPTOMLAR */}
+        <SelectionChips
+          title="Semptomlar"
+          options={SYMPTOMS}
+          selectedValues={symptoms}
+          onChange={setSymptoms}
+          multiple={true}
+        />
 
-      {/* RAHATSIZLIK ŞİDDETİ */}
-      <Text style={styles.label}>
-        Rahatsızlık Şiddeti
-      </Text>
+        {/* RAHATSIZLIK ŞİDDETİ */}
+        <Text style={styles.label}>
+          Rahatsızlık Şiddeti
+        </Text>
 
-      <View style={styles.severityContainer}>
-        {([1, 2, 3, 4, 5] as Severity[]).map(
-          (level) => (
-            <Pressable
-              key={level}
-              onPress={() => setSeverity(level)}
-              disabled={isSaving}
-              accessibilityRole="radio"
-              accessibilityState={{
-                checked: severity === level,
-              }}
-              style={[
-                styles.severityButton,
-                severity === level &&
-                  styles.selectedSeverity,
-              ]}
-            >
-              <Text
+        <View style={styles.severityContainer}>
+          {([1, 2, 3, 4, 5] as Severity[]).map(
+            (level) => (
+              <Pressable
+                key={level}
+                onPress={() => setSeverity(level)}
+                disabled={isSaving}
+                accessibilityRole="radio"
+                accessibilityState={{
+                  checked: severity === level,
+                }}
                 style={[
-                  styles.severityText,
+                  styles.severityButton,
                   severity === level &&
-                    styles.selectedSeverityText,
+                    styles.selectedSeverity,
                 ]}
               >
-                {level}
+                <Text
+                  style={[
+                    styles.severityText,
+                    severity === level &&
+                      styles.selectedSeverityText,
+                  ]}
+                >
+                  {level}
+                </Text>
+              </Pressable>
+            )
+          )}
+        </View>
+
+        <Text style={styles.hint}>
+          1 = Çok hafif, 5 = Çok şiddetli
+        </Text>
+
+        {/* KAYDET / GÜNCELLE */}
+        <Pressable
+          onPress={handleSubmit}
+          disabled={!isValid || isSaving}
+          accessibilityRole="button"
+          accessibilityState={{
+            disabled: !isValid || isSaving,
+          }}
+          style={[
+            styles.submitButton,
+            (!isValid || isSaving) &&
+              styles.disabledButton,
+          ]}
+        >
+          {isSaving ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator
+                size="small"
+                color="#FFFFFF"
+              />
+
+              <Text style={styles.submitText}>
+                {isEditing
+                  ? "Güncelleniyor..."
+                  : "Gönderiliyor..."}
               </Text>
-            </Pressable>
-          )
-        )}
-      </View>
-
-      <Text style={styles.hint}>
-        1 = Çok hafif, 5 = Çok şiddetli
-      </Text>
-
-      {/* KAYDET / GÜNCELLE BUTONU */}
-      <Pressable
-        onPress={handleSubmit}
-        disabled={!isValid || isSaving}
-        accessibilityRole="button"
-        accessibilityState={{
-          disabled: !isValid || isSaving,
-        }}
-        style={[
-          styles.submitButton,
-          (!isValid || isSaving) &&
-            styles.disabledButton,
-        ]}
-      >
-        {isSaving ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator
-              size="small"
-              color="#FFFFFF"
-            />
+            </View>
+          ) : (
             <Text style={styles.submitText}>
               {isEditing
-                ? "Güncelleniyor..."
-                : "Gönderiliyor..."}
+                ? "Değişiklikleri Kaydet"
+                : "Öğünü Kaydet"}
             </Text>
-          </View>
-        ) : (
-          <Text style={styles.submitText}>
-            {isEditing
-              ? "Değişiklikleri Kaydet"
-              : "Öğünü Kaydet"}
-          </Text>
-        )}
-      </Pressable>
-    </ScrollView>
+          )}
+        </Pressable>
+      </ScrollView>
+
+      {/* DARK / LIGHT UYUMLU ALERT */}
+      <CustomAlert
+        visible={alertState.visible}
+        title={alertState.title}
+        message={alertState.message}
+        type={alertState.type}
+        onClose={closeAlert}
+      />
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    screen: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
 
-  content: {
-    padding: 20,
-    paddingBottom: 48,
-  },
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
 
-  heading: {
-    fontSize: typography.title,
-    fontWeight: "700",
-    color: colors.primaryDark,
-    marginBottom: 6,
-  },
+    content: {
+      padding: 20,
+      paddingBottom: 48,
+    },
 
-  description: {
-    fontSize: typography.caption,
-    color: colors.secondaryText,
-    marginBottom: 28,
-  },
+    heading: {
+      fontSize: typography.title,
+      fontWeight: "700",
+      color: colors.primary,
+      marginBottom: 6,
+    },
 
-  label: {
-    fontSize: typography.body,
-    fontWeight: "600",
-    color: colors.text,
-    marginBottom: 12,
-  },
+    description: {
+      fontSize: typography.caption,
+      color: colors.secondaryText,
+      marginBottom: 28,
+    },
 
-  input: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: typography.body,
-    color: colors.text,
-    marginBottom: 24,
-  },
+    label: {
+      fontSize: typography.body,
+      fontWeight: "600",
+      color: colors.text,
+      marginBottom: 12,
+    },
 
-  severityContainer: {
-    flexDirection: "row",
-    gap: 10,
-  },
+    input: {
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      fontSize: typography.body,
+      color: colors.text,
+      marginBottom: 24,
+    },
 
-  severityButton: {
-    flex: 1,
-    paddingVertical: 14,
-    alignItems: "center",
-    borderRadius: 12,
-    backgroundColor: colors.accentLight,
-    borderWidth: 1,
-    borderColor: colors.accentLight,
-  },
+    severityContainer: {
+      flexDirection: "row",
+      gap: 10,
+    },
 
-  selectedSeverity: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accentDark,
-  },
+    severityButton: {
+      flex: 1,
+      paddingVertical: 14,
+      alignItems: "center",
+      borderRadius: 12,
+      backgroundColor: colors.accentLight,
+      borderWidth: 1,
+      borderColor: colors.accentLight,
+    },
 
-  severityText: {
-    fontSize: typography.body,
-    fontWeight: "600",
-    color: colors.accentDark,
-  },
+    selectedSeverity: {
+      backgroundColor: colors.accent,
+      borderColor: colors.accentDark,
+    },
 
-  selectedSeverityText: {
-    color: "#FFFFFF",
-  },
+    severityText: {
+      fontSize: typography.body,
+      fontWeight: "600",
+      color: colors.accent,
+    },
 
-  hint: {
-    fontSize: typography.small,
-    color: colors.secondaryText,
-    marginTop: 8,
-    marginBottom: 28,
-  },
+    selectedSeverityText: {
+      color: "#FFFFFF",
+    },
 
-  submitButton: {
-    backgroundColor: colors.primary,
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: "center",
-  },
+    hint: {
+      fontSize: typography.small,
+      color: colors.secondaryText,
+      marginTop: 8,
+      marginBottom: 28,
+    },
 
-  disabledButton: {
-    opacity: 0.45,
-  },
+    submitButton: {
+      backgroundColor: colors.primary,
+      borderRadius: 12,
+      paddingVertical: 16,
+      alignItems: "center",
+    },
 
-  submitText: {
-    color: "#FFFFFF",
-    fontSize: typography.body,
-    fontWeight: "600",
-  },
+    disabledButton: {
+      opacity: 0.45,
+    },
 
-  loadingContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-});
+    submitText: {
+      color: "#FFFFFF",
+      fontSize: typography.body,
+      fontWeight: "600",
+    },
+
+    loadingContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+    },
+  });

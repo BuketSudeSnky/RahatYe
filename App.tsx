@@ -18,29 +18,46 @@ import MealFormScreen from "./src/screen/MealFormScreen";
 import MealHistoryScreen from "./src/screen/MealHistoryScreen";
 
 import type { MealLog } from "./src/types/meal";
+import type { ThemeColors } from "./src/theme/colors";
 
 import { useMealStore } from "./src/store/useMealStore";
-import { colors } from "./src/theme/colors";
+import { useThemeStore } from "./src/store/useThemeStore";
 
 type Screen = "form" | "history";
 
 export default function App() {
-
   const [activeScreen, setActiveScreen] =
     useState<Screen>("form");
 
   const [editingMeal, setEditingMeal] =
     useState<MealLog | null>(null);
 
+  // Öğün kayıtları
   const loadMeals = useMealStore(
     (state) => state.loadMeals
   );
+
+  // Tema yönetimi
+  const theme = useThemeStore((state) => state.theme);
+  const colors = useThemeStore((state) => state.colors);
+  const loadTheme = useThemeStore(
+    (state) => state.loadTheme
+  );
+  const toggleTheme = useThemeStore(
+    (state) => state.toggleTheme
+  );
+
+  const styles = createStyles(colors);
 
   useEffect(() => {
     loadMeals().catch((error) => {
       console.error("Öğünler yüklenemedi:", error);
     });
-  }, [loadMeals]);
+
+    loadTheme().catch((error) => {
+      console.error("Tema yüklenemedi:", error);
+    });
+  }, [loadMeals, loadTheme]);
 
   const handleEditMeal = (meal: MealLog) => {
     setEditingMeal(meal);
@@ -57,14 +74,38 @@ export default function App() {
     setActiveScreen("form");
   };
 
-  const handleHistory = () => {
-    setActiveScreen("history");
-  };
-
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="dark-content" />
+        <StatusBar
+  barStyle={
+    theme === "dark"
+      ? "light-content"
+      : "dark-content"
+  }
+/>
+
+        {/* ÜST BAŞLIK */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>
+            Rahat Ye
+          </Text>
+
+          <Pressable
+            onPress={() => {
+              toggleTheme().catch((error) => {
+                console.error("Tema değiştirilemedi:", error);
+              });
+            }}
+            style={styles.themeButton}
+            accessibilityRole="button"
+            accessibilityLabel="Temayı değiştir"
+          >
+            <Text style={styles.themeIcon}>
+              {theme === "light" ? "🌙" : "☀️"}
+            </Text>
+          </Pressable>
+        </View>
 
         {/* EKRAN İÇERİĞİ */}
         <View style={styles.content}>
@@ -83,11 +124,10 @@ export default function App() {
 
         {/* ALT MENÜ */}
         <View style={styles.tabBar}>
-          {/* YENİ ÖĞÜN */}
           <Pressable
             onPress={handleNewMeal}
-            accessibilityRole="button"
             style={styles.tab}
+            accessibilityRole="button"
           >
             <Text
               style={[
@@ -100,11 +140,10 @@ export default function App() {
             </Text>
           </Pressable>
 
-          {/* GEÇMİŞ */}
           <Pressable
-            onPress={handleHistory}
-            accessibilityRole="button"
+            onPress={() => setActiveScreen("history")}
             style={styles.tab}
+            accessibilityRole="button"
           >
             <Text
               style={[
@@ -122,39 +161,67 @@ export default function App() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
 
-  content: {
-    flex: 1,
-  },
+    header: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: 20,
+      paddingVertical: 12,
+      backgroundColor: colors.surface,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
 
-  tabBar: {
-    flexDirection: "row",
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    backgroundColor: colors.surface,
-    paddingVertical: 12,
-    paddingBottom: 14,
-  },
+    headerTitle: {
+      fontSize: 22,
+      fontWeight: "700",
+      color: colors.primary,
+    },
 
-  tab: {
-    flex: 1,
-    alignItems: "center",
-    paddingVertical: 8,
-  },
+    themeButton: {
+      padding: 10,
+      backgroundColor: colors.chipBackground,
+      borderRadius: 20,
+    },
 
-  tabText: {
-    fontSize: 15,
-    color: colors.secondaryText,
-    fontWeight: "500",
-  },
+    themeIcon: {
+      fontSize: 22,
+    },
 
-  activeTab: {
-    color: colors.primary,
-    fontWeight: "700",
-  },
-});
+    content: {
+      flex: 1,
+    },
+
+    tabBar: {
+      flexDirection: "row",
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+      backgroundColor: colors.surface,
+      paddingVertical: 12,
+      paddingBottom: 14,
+    },
+
+    tab: {
+      flex: 1,
+      alignItems: "center",
+      paddingVertical: 8,
+    },
+
+    tabText: {
+      fontSize: 15,
+      color: colors.secondaryText,
+      fontWeight: "500",
+    },
+
+    activeTab: {
+      color: colors.primary,
+      fontWeight: "700",
+    },
+  });
